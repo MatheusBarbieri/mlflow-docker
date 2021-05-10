@@ -1,0 +1,54 @@
+version: "3.2"
+services:
+  artifact-store:
+    image: minio/minio:latest
+    container_name: artifact-storage
+    ports:
+      - 9000:9000
+    environment:
+      - MINIO_ACCESS_KEY=${AWS_ACCESS_KEY_ID}
+      - MINIO_SECRET_KEY=${AWS_SECRET_ACCESS_KEY}
+    command: server /date
+    networks:
+      - mlflow-net
+    volumes:
+      - ./artifacts:/date
+  backend_store:
+    restart: always
+    image: mysql/mysql-server:5.7.28
+    container_name: mlflow-backend-store
+    expose:
+      - "3306"
+    environment:
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - MYSQL_USER=${MYSQL_USER}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+    volumes:
+      - ./backend:/var/lib/mysql
+    networks:
+      - mlflow-net
+  mlflow:
+    container_name: mlflow-server
+    image: mlflow-tracking-server
+    build:
+      context: ./mlflow
+      dockerfile: Dockerfile
+    ports:
+      - "5000:5000"
+    environment:
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_DEFAULT_REGION=${AWS_REGION}
+      - AWS_BUCKET_NAME=${AWS_BUCKET_NAME}
+      - MLFLOW_S3_ENDPOINT_URL=http://artifact-store:9000
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_USER=${MYSQL_USER}
+    networks:
+      - mlflow-net
+    entrypoint: ./run.sh
+
+networks:
+  mlflow-net:
+    driver: bridge
